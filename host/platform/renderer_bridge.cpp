@@ -220,7 +220,10 @@ RendererBridge::RendererBridge() = default;
 void RendererBridge::OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
                                       CefRefPtr<CefV8Context> context) {
   // Only first-party app pages get the bridge.
-  if (!StartsWith(frame->GetURL().ToString(), std::string(ipc::kScheme) + "://")) return;
+  if (!StartsWith(frame->GetURL().ToString(),
+                  std::string(ipc::kScheme) + "://" + ipc::kAppsHost + "/")) {
+    return;
+  }
 
   // A frame can own several contexts (e.g. DevTools isolated worlds); each gets
   // its own state, all sharing the frame's listener counts.

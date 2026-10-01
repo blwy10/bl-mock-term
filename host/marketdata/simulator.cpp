@@ -21,8 +21,8 @@ TickSimulator::TickSimulator(std::vector<Instrument> instruments, uint64_t seed)
     t.prev_close = Round(inst.base_price, inst.decimals);
     t.last = Round(inst.base_price + drift, inst.decimals);
     t.open = t.last;
-    t.high = std::max(t.open, t.prev_close);
-    t.low = std::min(t.open, t.prev_close);
+    t.high = t.open;
+    t.low = t.open;
     double half = std::max(t.last * inst.spread_bps / 20000.0, std::pow(10.0, -inst.decimals));
     t.bid = Round(t.last - half, inst.decimals);
     t.ask = Round(t.last + half, inst.decimals);

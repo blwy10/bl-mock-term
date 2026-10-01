@@ -111,11 +111,15 @@ async function load(r: HistoryRange, ticker: string): Promise<void> {
   document.querySelectorAll<HTMLButtonElement>('[data-range]').forEach((b) => b.classList.toggle('active', b.dataset.range === r));
   bars = await mt().getHistory(ticker, r);
   if (lastTick && bars.length > 0) bars[bars.length - 1].close = lastTick.last;
+  updateStats();
+  draw();
+}
+
+function updateStats(): void {
   const first = bars[0]?.close ?? 0;
   const lastClose = bars[bars.length - 1]?.close ?? 0;
   const stats = document.getElementById('stats')!;
   stats.textContent = `${bars.length} bars \u00b7 range ${fmtChange(lastClose - first, decimals)} (${fmtPct(first ? ((lastClose - first) / first) * 100 : 0)})`;
-  draw();
 }
 
 async function main(): Promise<void> {
@@ -144,6 +148,7 @@ async function main(): Promise<void> {
       b.close = t.last;
       b.high = Math.max(b.high, t.last);
       b.low = Math.min(b.low, t.last);
+      updateStats();
       draw();
     }
   });

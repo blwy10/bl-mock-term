@@ -27,11 +27,13 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
     if (decoded.empty() || decoded.back() == '/') decoded += "index.html";
 
     std::filesystem::path rel = std::filesystem::u8path(decoded).lexically_normal();
+    if (rel.has_root_name() || rel.has_root_directory()) return NotFound();
     for (const auto& part : rel) {
       if (part == "..") return NotFound();
     }
-    std::filesystem::path file = root_ / rel;
     std::error_code ec;
+    std::filesystem::path file = std::filesystem::weakly_canonical(root_ / rel, ec);
+    if (ec || !IsWithin(file, std::filesystem::weakly_canonical(root_, ec))) return NotFound();
     if (!std::filesystem::is_regular_file(file, ec)) return NotFound();
 
     CefRefPtr<CefStreamReader> stream = CefStreamReader::CreateForFile(file.wstring());
@@ -46,6 +48,16 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
   }
 
  private:
+  static bool IsWithin(const std::filesystem::path& file, const std::filesystem::path& root) {
+    auto f = file.begin();
+    for (const auto& part : root) {
+      if (part.empty()) continue;
+      if (f == file.end() || *f != part) return false;
+      ++f;
+    }
+    return true;
+  }
+
   static CefRefPtr<CefResourceHandler> NotFound() {
     CefRefPtr<CefStreamReader> stream =
         CefStreamReader::CreateForData(const_cast<char*>(kNotFound), sizeof(kNotFound) - 1);

@@ -186,6 +186,7 @@ input.addEventListener('keydown', (e) => {
       renderSuggestions();
     }
   } else if (e.key === 'Escape') {
+    input.value = '';
     suggestions = [];
     renderSuggestions();
   }

@@ -28,8 +28,9 @@ COPY_FILES(mockterm "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${CEF_TARGET_
 
 # Bundled TypeScript apps, served via mockterm://apps/.
 set(MOCKTERM_APPS_DIST "${CMAKE_SOURCE_DIR}/apps/dist")
-add_custom_command(TARGET mockterm POST_BUILD
+add_custom_target(mockterm_apps ALL
   COMMAND ${CMAKE_COMMAND} -E rm -rf "${CEF_TARGET_OUT_DIR}/apps"
   COMMAND ${CMAKE_COMMAND} -E copy_directory "${MOCKTERM_APPS_DIST}" "${CEF_TARGET_OUT_DIR}/apps"
   COMMENT "Copying apps/dist -> apps/"
 )
+add_dependencies(mockterm mockterm_apps)

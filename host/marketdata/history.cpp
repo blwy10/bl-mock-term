@@ -7,6 +7,10 @@
 
 namespace mockterm::md {
 
+namespace {
+constexpr int64_t kDayMs = 86'400'000;
+}  // namespace
+
 std::vector<Bar> GenerateHistory(const Instrument& inst, HistoryRange range,
                                  double last_price, int64_t now_ms) {
   int count = 0;
@@ -14,8 +18,8 @@ std::vector<Bar> GenerateHistory(const Instrument& inst, HistoryRange range,
   double vol = 0;
   switch (range) {
     case HistoryRange::OneDay: count = 390; step_ms = 60'000; vol = 0.0009; break;
-    case HistoryRange::OneMonth: count = 22 * 7; step_ms = 3'600'000; vol = 0.004; break;
-    case HistoryRange::OneYear: count = 252; step_ms = 86'400'000; vol = 0.013; break;
+    case HistoryRange::OneMonth: count = 22 * 7; step_ms = 30 * kDayMs / (count - 1); vol = 0.004; break;
+    case HistoryRange::OneYear: count = 252; step_ms = 365 * kDayMs / (count - 1); vol = 0.013; break;
   }
   if (inst.asset_class == AssetClass::Fx) vol *= 0.35;
   if (inst.asset_class == AssetClass::Index) vol *= 0.7;
