@@ -20,7 +20,7 @@
     },
     {
       "title": "Framing, Messages and Elements",
-      "purpose": "Frame layout, the Message envelope, MessageType and MessageFlags, and the Element value tree, as implemented in common/mtcore/. Anchors: common/mtcore/mtcore_codec.cpp, common/mtcore/mtcore_codec.h, common/mtcore/mtcore_message.cpp, common/mtcore/mtcore_element.cpp, common/mtcore/mtcore_element.h, docs/PROTOCOL.md. Cover: big-endian ByteWriter and ByteReader, magic 0x4D54 and version, the 16 MiB frame limit (k_MAX_FRAME) and 32-level nesting limit (k_MAX_DEPTH), decode failure closing the connection, Element scalar, sequence and array kinds and merge semantics used by caches and conflation. Show a byte-level example of one SUBSCRIPTION_DATA frame. Tests: host/tests/backend_unit_test.cpp (Codec, Element).",
+      "purpose": "Frame layout, the Message envelope, MessageType and MessageFlags, and the Element value tree, as implemented in the mtcore library. Anchors: common/mtcore/mtcore_codec.cpp, common/mtcore/mtcore_codec.h, common/mtcore/mtcore_message.cpp, common/mtcore/mtcore_element.cpp, common/mtcore/mtcore_element.h, docs/PROTOCOL.md. Cover: big-endian ByteWriter and ByteReader, magic 0x4D54 and version, the 16 MiB frame limit (k_MAX_FRAME) and 32-level nesting limit (k_MAX_DEPTH), decode failure closing the connection, Element scalar, sequence and array kinds and merge semantics used by caches and conflation. Show a byte-level example of one SUBSCRIPTION_DATA frame. Tests: host/tests/backend_unit_test.cpp (Codec, Element).",
       "parent": "Wire Protocol"
     },
     {
@@ -144,7 +144,7 @@
     },
     {
       "title": "Modernisation Guide",
-      "purpose": "The inventory of legacy C++ idioms in common/, server/ and comms/ and the suggested order for moving them to modern C++. Anchors: docs/MODERNISATION.md, cmake/legacy.cmake, common/mtcore/mtcore_refcount.h, common/mtcore/mtcore_mutex.cpp, common/mtcore/mtcore_element.h, server/mtsrv_server.h. For each idiom, show a short real snippet from the code and its modern replacement, explain the risk, and name the tests that act as the safety net. This is the only page where modern rewrites of legacy code should be shown.",
+      "purpose": "The inventory of legacy C++ idioms in the mtcore, mtclient, mtserver and mtcomm code and the suggested order for moving them to modern C++. Anchors: docs/MODERNISATION.md, cmake/legacy.cmake, common/mtcore/mtcore_refcount.h, common/mtcore/mtcore_mutex.cpp, common/mtcore/mtcore_element.h, server/mtsrv_server.h. For each idiom, show a short real snippet from the code and its modern replacement, explain the risk, and name the tests that act as the safety net. This is the only page where modern rewrites of legacy code should be shown.",
       "parent": "Build, Test and Modernisation"
     }
   ]
