@@ -11,6 +11,12 @@ using mtcore::Message;
 using mtcore::MessageType;
 using mtcore::StringUtil;
 
+namespace {
+
+const char k_GATEWAY_APPLICATION[] = "mtcomm";
+
+}  // close unnamed namespace
+
 MsgService::MsgService(ChatEngine *engine)
 : d_engine_p(engine)
 , d_delivered(0)
@@ -33,12 +39,18 @@ void MsgService::handleRequest(ClientSession *session, const Message& request)
         Service::handleRequest(session, request);
         return;
     }
-    std::string from = StringUtil::trim(request.body().getChildString("from"));
+    // Only a comms gateway may send on behalf of its local users; anyone
+    // else always sends as the user they logged on as.
+    std::string from = session->user();
+    if (session->application() == k_GATEWAY_APPLICATION) {
+        std::string onBehalfOf =
+                     StringUtil::trim(request.body().getChildString("from"));
+        if (!onBehalfOf.empty()) {
+            from = onBehalfOf;
+        }
+    }
     std::string to   = StringUtil::trim(request.body().getChildString("to"));
     std::string text = request.body().getChildString("text");
-    if (from.empty()) {
-        from = session->user();
-    }
     if (to.empty() || StringUtil::trim(text).empty()) {
         ServiceUtil::sendRequestFailure(session,
                                         request,

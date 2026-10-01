@@ -71,7 +71,18 @@ int Thread::join(int timeoutMs)
     DWORD rc = ::WaitForSingleObject(d_handle,
                                      timeoutMs < 0 ? INFINITE
                                                    : (DWORD)timeoutMs);
-    return rc == WAIT_OBJECT_0 ? 0 : 1;
+    if (rc != WAIT_OBJECT_0) {
+        return 1;
+    }
+    ::CloseHandle(d_handle);
+    d_handle   = NULL;
+    d_threadId = 0;
+    if (d_ownsRunnable) {
+        delete d_runnable_p;
+        d_ownsRunnable = false;
+    }
+    d_runnable_p = NULL;
+    return 0;
 }
 
 bool Thread::isRunning() const

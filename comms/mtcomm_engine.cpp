@@ -21,6 +21,7 @@ using mtcore::Uint32;
 namespace {
 
 const char k_COMMS_NAME[]    = "mtcomm";
+const char k_MSG_SERVICE[]   = "//mt/msg";
 const char k_COMMS_VERSION[] = "1.0";
 
 }  // close unnamed namespace
@@ -487,6 +488,9 @@ void CommsEngine::handleRequest(LocalClient *client, const Message& request)
     }
     Message forward(request);
     forward.setCorrelationId(upstreamCid);
+    if (request.service() == k_MSG_SERVICE) {
+        forward.body().setChildString("from", client->user());
+    }
     if (d_upstream_p->sendRequest(forward) != 0) {
         LockGuard guard(&d_routeMutex);
         d_requestRoutes.erase(upstreamCid);
@@ -656,6 +660,7 @@ void CommsEngine::routeSubscriptionData(const Message& message)
     std::string key;
     std::string service;
     std::string topicName;
+    bool conflatable = false;
     Uint32 flags = message.flags();
     {
         LockGuard guard(&d_routeMutex);
@@ -676,16 +681,17 @@ void CommsEngine::routeSubscriptionData(const Message& message)
         d_cache.update(topic->key, message.body(), paint, now);
         subscribers.assign(topic->subscribers.begin(),
                            topic->subscribers.end());
-        key       = topic->key;
-        service   = topic->service;
-        topicName = topic->topic;
+        key         = topic->key;
+        service     = topic->service;
+        topicName   = topic->topic;
+        conflatable = topic->subscribe.body().hasChild("fields");
     }
     for (size_t i = 0; i < subscribers.size(); ++i) {
         LocalClientHandle client = findClientById(subscribers[i].first);
         if (client.isNull()) {
             continue;
         }
-        if (!paint && client->conflateMs() > 0) {
+        if (!paint && conflatable && client->conflateMs() > 0) {
             d_conflator.add(subscribers[i], service, topicName,
                             message.body(), now);
             continue;

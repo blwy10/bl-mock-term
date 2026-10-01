@@ -220,7 +220,6 @@ int main(int argc, char *argv[])
     mtclient::SessionOptions options;
     options.application         = "mtcli";
     options.autoReconnect       = false;
-    options.heartbeatIntervalMs = 0;
 
     int i = 1;
     for (; i + 1 < argc && !strncmp(argv[i], "--", 2); i += 2) {

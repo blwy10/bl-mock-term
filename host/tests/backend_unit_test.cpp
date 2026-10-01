@@ -12,7 +12,9 @@
 #include <mtcore_codec.h>
 #include <mtcore_element.h>
 #include <mtcore_message.h>
+#include <mtcore_thread.h>
 #include <mtsrv_gapdetector.h>
+#include <mtsrv_history.h>
 
 using mtcore::Element;
 using mtcore::Message;
@@ -207,4 +209,50 @@ TEST(TopicMux, SharesEquivalentSubscriptions)
     EXPECT_TRUE(mux.detach(&removed, mtcomm::DownstreamKey(2, 10)));
     EXPECT_EQ(500u, removed.upstreamCid);
     EXPECT_EQ(0, mux.topicCount());
+}
+
+TEST(HistoryOverlay, PlacesCapturedBarsByTimestamp)
+{
+    std::vector<mtsrv::Bar> bars(10);
+    for (size_t i = 0; i < bars.size(); ++i) {
+        bars[i].timestamp = 1000000 + (mtcore::Int64)i * 60000;
+        bars[i].open = bars[i].close = 100;
+    }
+    std::vector<mtsrv::Bar> live(2);
+    live[0].timestamp = bars[5].timestamp - 1000;  // minute 5, slightly early
+    live[0].open = 1;
+    live[0].close = 2;
+    live[1].timestamp = bars[8].timestamp;          // minutes 6 and 7 had no trades
+    live[1].open = 3;
+    live[1].close = 4;
+
+    EXPECT_EQ(2, mtsrv::HistoryGenerator::overlay(&bars, live));
+    EXPECT_DOUBLE_EQ(2, bars[5].close);
+    EXPECT_DOUBLE_EQ(100, bars[6].close);
+    EXPECT_DOUBLE_EQ(100, bars[7].close);
+    EXPECT_DOUBLE_EQ(4, bars[8].close);
+    EXPECT_DOUBLE_EQ(100, bars[9].close);
+    EXPECT_DOUBLE_EQ(1, bars[4].close) << "synthetic series stitched to the seam";
+    for (size_t i = 1; i < bars.size(); ++i) {
+        EXPECT_EQ(60000, bars[i].timestamp - bars[i - 1].timestamp);
+    }
+}
+
+namespace {
+struct CountingRunnable : mtcore::Runnable {
+    int runs;
+    CountingRunnable() : runs(0) {}
+    virtual void run() { ++runs; }
+};
+}  // namespace
+
+TEST(Thread, CanBeRestartedAfterJoin)
+{
+    CountingRunnable runnable;
+    mtcore::Thread thread("restart");
+    ASSERT_EQ(0, thread.start(&runnable));
+    ASSERT_EQ(0, thread.join());
+    ASSERT_EQ(0, thread.start(&runnable));
+    ASSERT_EQ(0, thread.join());
+    EXPECT_EQ(2, runnable.runs);
 }

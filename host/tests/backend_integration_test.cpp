@@ -238,3 +238,80 @@ TEST_F(BackendIntegration, RoutesRequestsAndFailures)
     engine.stop();
     server->stop();
 }
+
+TEST_F(BackendIntegration, SessionReportsDownAndCanRestart)
+{
+    Collector c;
+    mtclient::SessionOptions options;
+    options.port = k_COMMS_PORT;
+    options.reconnectMinMs = 50;
+    options.reconnectMaxMs = 100;
+    mtclient::Session session(options, &c);
+    ASSERT_EQ(0, session.start());
+    ASSERT_TRUE(waitUntil([&] {
+        mtcore::LockGuard guard(&c.d_mutex);
+        return !c.d_states.empty()
+            && c.d_states[0] == mtclient::SessionState::e_DOWN;
+    })) << "a failed first connect is reported, not left as CONNECTING";
+    session.stop();
+
+    std::unique_ptr<mtsrv::Server> server = startServer();
+    mtcomm::CommsConfig config;
+    config.port = k_COMMS_PORT;
+    config.upstreamPort = k_SERVER_PORT;
+    mtcomm::CommsEngine engine(config);
+    ASSERT_EQ(0, engine.start());
+    ASSERT_EQ(0, session.start());
+    ASSERT_TRUE(waitUntil([&] { return session.isUp(); }));
+
+    session.stop();
+    engine.stop();
+    server->stop();
+}
+
+TEST_F(BackendIntegration, ChatMessagesAreNotConflated)
+{
+    std::unique_ptr<mtsrv::Server> server = startServer();
+    mtcomm::CommsConfig config;
+    config.port = k_COMMS_PORT;
+    config.upstreamPort = k_SERVER_PORT;
+    mtcomm::CommsEngine engine(config);
+    ASSERT_EQ(0, engine.start());
+
+    Collector me;
+    mtclient::SessionOptions options;
+    options.port = k_COMMS_PORT;
+    options.user = "ME";
+    options.conflateMs = 1000;
+    mtclient::Session inbox(options, &me);
+    ASSERT_EQ(0, inbox.start());
+    Collector a;
+    std::unique_ptr<mtclient::Session> sender = connect(&a, "ALICE");
+    ASSERT_TRUE(waitUntil([&] { return inbox.isUp() && sender->isUp(); }));
+    inbox.subscribe("//mt/msg", "ME", std::vector<std::string>(), 1);
+    ASSERT_TRUE(waitUntil([&] {
+        return me.count(MessageType::e_SUBSCRIPTION_STARTED) == 1;
+    }));
+
+    for (int i = 0; i < 3; ++i) {
+        Message send(MessageType::e_REQUEST, sender->nextCorrelationId());
+        send.setService("//mt/msg");
+        send.setOperation("Send");
+        send.body().setChildString("from", "BOB");
+        send.body().setChildString("to", "ME");
+        send.body().setChildString("text", "hi");
+        sender->sendRequest(send);
+    }
+    ASSERT_TRUE(waitUntil([&] {
+        return me.count(MessageType::e_SUBSCRIPTION_DATA) == 3;
+    }, 900)) << "each message arrives, within one conflation interval";
+    Message last;
+    ASSERT_TRUE(me.lastOf(&last, MessageType::e_SUBSCRIPTION_DATA));
+    EXPECT_EQ("ALICE", last.body().getChildString("from"))
+        << "sender identity comes from the logon, not the request";
+
+    inbox.stop();
+    sender->stop();
+    engine.stop();
+    server->stop();
+}

@@ -122,21 +122,46 @@ int HistoryGenerator::overlay(std::vector<Bar>       *bars,
     if (bars->empty() || live.empty()) {
         return 0;
     }
-    size_t n = live.size() < bars->size() ? live.size() : bars->size();
-    size_t offset = bars->size() - n;
-    size_t liveOffset = live.size() - n;
-    for (size_t i = 0; i < n; ++i) {
-        (*bars)[offset + i] = live[liveOffset + i];
+    if (bars->size() < 2) {
+        return 0;
     }
-    if (offset > 0) {
+    // Captured bars replace the synthetic bar of the same minute, so gaps in
+    // trading keep their synthetic bars and timestamps stay on the grid.
+    Int64 start = (*bars)[0].timestamp;
+    Int64 step  = (*bars)[1].timestamp - start;
+    if (step <= 0) {
+        return 0;
+    }
+    size_t first  = bars->size();
+    int    placed = 0;
+    for (std::vector<Bar>::const_iterator it = live.begin();
+         it != live.end();
+         ++it) {
+        Int64 delta = it->timestamp - start + step / 2;
+        if (delta < 0) {
+            continue;
+        }
+        size_t slot = (size_t)(delta / step);
+        if (slot >= bars->size()) {
+            continue;
+        }
+        Int64 gridTime = (*bars)[slot].timestamp;
+        (*bars)[slot] = *it;
+        (*bars)[slot].timestamp = gridTime;
+        if (slot < first) {
+            first = slot;
+        }
+        ++placed;
+    }
+    if (placed > 0 && first > 0) {
         // Stitch the synthetic series onto the first captured bar.
-        Bar& seam = (*bars)[offset];
-        Bar& before = (*bars)[offset - 1];
+        Bar& seam = (*bars)[first];
+        Bar& before = (*bars)[first - 1];
         before.close = seam.open;
         before.high  = maxOf(before.high, before.close);
         before.low   = minOf(before.low, before.close);
     }
-    return (int)n;
+    return placed;
 }
 
 }  // close namespace mtsrv

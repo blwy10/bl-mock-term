@@ -71,7 +71,12 @@ int Session::start()
     }
     d_running = true;
     d_state   = SessionState::e_CONNECTING;
-    return d_manager.start(&d_managerRunnable);
+    int rc = d_manager.start(&d_managerRunnable);
+    if (rc != 0) {
+        d_running = false;
+        d_state   = SessionState::e_STOPPED;
+    }
+    return rc;
 }
 
 void Session::stop()
@@ -115,15 +120,19 @@ void Session::managerLoop()
             if (!d_running) {
                 break;
             }
+            bool changed = false;
             {
                 LockGuard guard(&d_mutex);
+                changed = d_state != SessionState::e_DOWN;
                 d_state = SessionState::e_DOWN;
             }
             expireRequests(TimeUtil::nowMillis());
-            if (!d_options.autoReconnect) {
+            if (changed || !d_options.autoReconnect) {
                 d_handler_p->processSessionState(this,
                                                  SessionState::e_DOWN,
                                                  NULL);
+            }
+            if (!d_options.autoReconnect) {
                 break;
             }
             d_wakeEvent.wait(backoff);
