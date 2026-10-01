@@ -1,0 +1,67 @@
+:root {
+  --bg: #000;
+  --panel: #0a0a0a;
+  --panel-2: #111;
+  --line: #262626;
+  --amber: #ffa028;
+  --amber-dim: #b36b12;
+  --text: #e6e6e6;
+  --muted: #8a8a8a;
+  --up: #2ee66b;
+  --down: #ff4b4b;
+  --blue: #5fa8ff;
+  --font: 'Consolas', 'Cascadia Mono', 'Lucida Console', monospace;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 12px/1.35 var(--font); overflow: hidden;
+}
+a { color: var(--amber); }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--text); }
+.muted { color: var(--muted); }
+.amber { color: var(--amber); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.fatal { color: var(--down); padding: 16px; }
+
+.app-header {
+  display: flex; align-items: baseline; gap: 12px; padding: 4px 8px;
+  background: var(--amber); color: #000; font-weight: bold;
+}
+.app-header .sub { font-weight: normal; }
+.app-body { position: absolute; inset: 24px 0 0 0; overflow: auto; }
+
+table.grid { width: 100%; border-collapse: collapse; }
+table.grid th {
+  position: sticky; top: 0; background: var(--panel-2); color: var(--amber);
+  text-align: left; font-weight: normal; padding: 2px 6px; border-bottom: 1px solid var(--line);
+}
+table.grid th.num { text-align: right; }
+table.grid td { padding: 1px 6px; border-bottom: 1px solid #141414; white-space: nowrap; }
+table.grid tr:hover td { background: #1a1405; cursor: pointer; }
+table.grid tr.group td {
+  color: #000; background: var(--amber-dim); font-weight: bold; padding: 2px 6px; cursor: default;
+}
+
+button, .btn {
+  font: inherit; background: #1b1b1b; color: var(--amber); border: 1px solid var(--line);
+  padding: 2px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--amber); }
+button.active { background: var(--amber); color: #000; }
+input {
+  font: inherit; background: #000; color: var(--amber); border: 1px solid var(--line);
+  padding: 3px 6px; outline: none;
+}
+input:focus { border-color: var(--amber); }
+
+@keyframes flash-up { from { background: #1e7a3f; color: #fff; } to { background: transparent; } }
+@keyframes flash-down { from { background: #9a2a2a; color: #fff; } to { background: transparent; } }
+.flash-up { animation: flash-up 0.7s ease-out; }
+.flash-down { animation: flash-down 0.7s ease-out; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #333; }
+::-webkit-scrollbar-track { background: #050505; }

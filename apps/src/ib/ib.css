@@ -1,0 +1,14 @@
+.ib { display: grid; grid-template-columns: 200px 1fr; gap: 1px; background: var(--line); }
+.ib > * { background: var(--bg); }
+#contacts div { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #141414; }
+#contacts div.active { background: var(--amber); color: #000; }
+#contacts .dot { color: var(--up); margin-right: 6px; }
+.conv { display: flex; flex-direction: column; min-height: 0; }
+.conv-title { padding: 4px 10px; color: var(--amber); border-bottom: 1px solid var(--line); }
+#log { flex: 1; overflow: auto; padding: 8px 10px; }
+.m { margin: 3px 0; }
+.m .t { color: var(--muted); margin-right: 8px; }
+.m .who { color: var(--amber); margin-right: 8px; }
+.m.out .who { color: var(--blue); }
+#form { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); }
+#form input { flex: 1; }

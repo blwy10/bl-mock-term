@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>IB - Instant Messaging</title>
+  <link rel="stylesheet" href="../common/theme.css" />
+  <link rel="stylesheet" href="ib.css" />
+</head>
+<body>
+  <div class="app-header">IB <span class="sub">Instant Messaging</span></div>
+  <div class="app-body ib">
+    <aside id="contacts"></aside>
+    <section class="conv">
+      <div class="conv-title" id="peer"></div>
+      <div id="log" data-testid="ib-log"></div>
+      <form id="form"><input id="text" data-testid="ib-input" autocomplete="off" placeholder="Type a message, e.g. where is AAPL?" /><button>SEND</button></form>
+    </section>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

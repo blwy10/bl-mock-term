@@ -1,0 +1,6 @@
+.gp { display: flex; flex-direction: column; }
+.toolbar { display: flex; gap: 4px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.toolbar #stats { margin-left: 12px; }
+.right { margin-left: auto; }
+.app-header b { font-size: 13px; }
+#chart { flex: 1; width: 100%; min-height: 0; display: block; }
