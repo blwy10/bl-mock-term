@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DES - Security Description</title>
+  <link rel="stylesheet" href="../common/theme.css" />
+  <link rel="stylesheet" href="des.css" />
+</head>
+<body>
+  <div class="app-header"><span id="sec">DES</span><span class="sub" id="name"></span></div>
+  <div class="app-body des" data-testid="des">
+    <section class="quote">
+      <div class="big" id="last" data-testid="des-last">--</div>
+      <div class="chg"><span id="chg">--</span> <span id="pct"></span></div>
+      <table class="kv" id="quote"></table>
+    </section>
+    <section class="info">
+      <h3>Description</h3>
+      <p id="desc" class="muted"></p>
+      <table class="kv" id="fund"></table>
+      <div class="actions">
+        <button id="gp">GP &rsaquo; Chart</button>
+        <button id="top">TOP &rsaquo; News</button>
+      </div>
+    </section>
+    <section class="news">
+      <h3>Related News</h3>
+      <table class="grid" id="news"><tbody></tbody></table>
+    </section>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

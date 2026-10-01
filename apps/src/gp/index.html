@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GP - Price Chart</title>
+  <link rel="stylesheet" href="../common/theme.css" />
+  <link rel="stylesheet" href="gp.css" />
+</head>
+<body>
+  <div class="app-header"><span id="sec">GP</span><span class="sub" id="name"></span>
+    <span class="sub right">Last <b id="last" data-testid="gp-last">--</b> <span id="chg"></span></span></div>
+  <div class="app-body gp" data-testid="gp">
+    <div class="toolbar">
+      <button data-range="1D" class="active">1D</button>
+      <button data-range="1M">1M</button>
+      <button data-range="1Y">1Y</button>
+      <span class="muted" id="stats"></span>
+    </div>
+    <canvas id="chart" data-testid="gp-chart"></canvas>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
