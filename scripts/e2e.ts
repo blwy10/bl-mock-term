@@ -4,7 +4,7 @@
 //
 // Usage (from scripts/):  npm ci && npm run e2e [-- --attach] [-- --exe <path>]
 //   --attach   connect to an already-running instance instead of launching one
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,6 +100,19 @@ async function main(): Promise<void> {
     await page.getByTestId('launchpad').waitFor();
     await sampleUntilChanged(() => page!.getByTestId('ticker-strip').innerText(), 'ticker strip');
     await shot(page, '0-launchpad');
+
+    console.log('Connection: mockterm -> mtcomm -> mtserver');
+    const conn = page.getByTestId('connection-status');
+    const connIs = (label: string, timeout: number) =>
+      page!.waitForFunction((l) => document.getElementById('conn')?.textContent === l, label, { timeout });
+    await connIs('LIVE', 15_000);
+    check(true, 'shell reports LIVE once mtcomm is logged on upstream');
+    execFileSync('taskkill', ['/F', '/IM', 'mtserver.exe'], { stdio: 'ignore' });
+    await connIs('STALE', 10_000);
+    check(true, `killing mtserver.exe turns the shell ${await conn.innerText()}`);
+    await connIs('LIVE', 20_000);
+    check(true, 'mtcomm restarts mtserver and the shell returns to LIVE');
+    await sampleUntilChanged(() => page!.getByTestId('ticker-strip').innerText(), 'ticker strip after recovery');
 
     console.log('AAPL US Equity DES');
     const des = await runCommand(page, 'aapl us equity des', 'DES');

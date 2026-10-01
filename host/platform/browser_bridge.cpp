@@ -11,14 +11,15 @@ namespace {
 std::string JsStringLiteral(const std::string& s) { return md::json::Quote(s); }
 }  // namespace
 
-BrowserBridge::BrowserBridge() : service_(std::make_unique<md::MarketDataService>(this)) {}
+BrowserBridge::BrowserBridge(md::CommsOptions options)
+    : client_(std::make_unique<md::CommsClient>(this, std::move(options))) {}
 
 BrowserBridge::~BrowserBridge() { Shutdown(); }
 
-void BrowserBridge::Start() { service_->Start(); }
+void BrowserBridge::Start() { client_->Start(); }
 
 void BrowserBridge::Shutdown() {
-  if (service_) service_->Stop();
+  if (client_) client_->Stop();
 }
 
 void BrowserBridge::OnBrowserCreated(CefRefPtr<CefBrowser> browser) {
@@ -45,10 +46,12 @@ void BrowserBridge::OnFrameDetached(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
   DropFrame({browser->GetIdentifier(), frame->GetIdentifier().ToString()});
 }
 
+void BrowserBridge::OnMainFrameLoaded(CefRefPtr<CefBrowser> browser) { DispatchStatus(browser); }
+
 void BrowserBridge::DropFrame(const FrameKey& key) {
   for (auto it = subs_.begin(); it != subs_.end();) {
     if (it->second.frame == key) {
-      service_->Unsubscribe(it->first);
+      client_->Unsubscribe(it->first);
       subs_by_js_.erase({key, it->second.js_id});
       it = subs_.erase(it);
     } else {
@@ -81,13 +84,13 @@ bool BrowserBridge::OnProcessMessage(CefRefPtr<CefBrowser> browser, CefRefPtr<Ce
     const md::SubscriberId id = next_subscriber_++;
     subs_[id] = Subscription{key, js_id};
     subs_by_js_[{key, js_id}] = id;
-    service_->Subscribe(id, tickers);
+    client_->Subscribe(id, tickers);
     return true;
   }
   if (name == ipc::kUnsubscribe) {
     auto it = subs_by_js_.find({key, args->GetInt(0)});
     if (it != subs_by_js_.end()) {
-      service_->Unsubscribe(it->second);
+      client_->Unsubscribe(it->second);
       subs_.erase(it->second);
       subs_by_js_.erase(it);
     }
@@ -104,7 +107,7 @@ bool BrowserBridge::OnProcessMessage(CefRefPtr<CefBrowser> browser, CefRefPtr<Ce
     return true;
   }
   if (name == ipc::kRequest) {
-    HandleRequest(frame, args);
+    HandleRequest(key, args);
     return true;
   }
   if (name == ipc::kOpenApp) {
@@ -120,7 +123,7 @@ bool BrowserBridge::OnProcessMessage(CefRefPtr<CefBrowser> browser, CefRefPtr<Ce
   return false;
 }
 
-void BrowserBridge::HandleRequest(CefRefPtr<CefFrame> frame, CefRefPtr<CefListValue> args) {
+void BrowserBridge::HandleRequest(const FrameKey& key, CefRefPtr<CefListValue> args) {
   const int req_id = args->GetInt(0);
   const std::string method = args->GetString(1).ToString();
   const std::string a = args->GetString(2).ToString();
@@ -128,26 +131,39 @@ void BrowserBridge::HandleRequest(CefRefPtr<CefFrame> frame, CefRefPtr<CefListVa
 
   if (method == ipc::kMethodHistory) {
     md::HistoryRange range;
-    if (!md::ParseHistoryRange(b, &range)) return Respond(frame, req_id, false, "invalid range: " + b);
-    auto bars = service_->History(a, range);
-    if (!bars) return Respond(frame, req_id, false, "unknown security: " + a);
-    return Respond(frame, req_id, true, md::json::ToJson(*bars));
+    if (!md::ParseHistoryRange(b, &range)) return Respond(key, req_id, false, "invalid range: " + b);
+    return client_->History(a, range, ReplyTo(key, req_id));
   }
-  if (method == ipc::kMethodNews) return Respond(frame, req_id, true, md::json::ToJson(service_->News(a)));
-  if (method == ipc::kMethodSecurities) {
-    return Respond(frame, req_id, true, md::json::ToJson(service_->Instruments()));
-  }
+  if (method == ipc::kMethodNews) return client_->News(a, ReplyTo(key, req_id));
+  if (method == ipc::kMethodSecurities) return client_->Securities(ReplyTo(key, req_id));
   if (method == ipc::kMethodChat) {
-    if (b.empty()) return Respond(frame, req_id, false, "empty message");
-    md::ChatMessage sent = service_->SendChat(a, b);
-    Broadcast(chat_listeners_, ipc::kChat, md::json::ToJson(sent));
-    return Respond(frame, req_id, true, "null");
+    if (b.empty()) return Respond(key, req_id, false, "empty message");
+    std::weak_ptr<BrowserBridge> weak = weak_from_this();
+    return client_->SendChat(a, b, [weak, key, req_id](bool ok, std::string payload) {
+      PostUiTask([weak, key, req_id, ok, payload = std::move(payload)] {
+        auto self = weak.lock();
+        if (!self) return;
+        if (!ok) return self->Respond(key, req_id, false, payload);
+        self->Broadcast(self->chat_listeners_, ipc::kChat, payload);
+        self->Respond(key, req_id, true, "null");
+      });
+    });
   }
-  Respond(frame, req_id, false, "unknown method: " + method);
+  Respond(key, req_id, false, "unknown method: " + method);
 }
 
-void BrowserBridge::Respond(CefRefPtr<CefFrame> frame, int req_id, bool ok, const std::string& payload) {
-  if (!frame || !frame->IsValid()) return;
+md::Reply BrowserBridge::ReplyTo(const FrameKey& key, int req_id) {
+  std::weak_ptr<BrowserBridge> weak = weak_from_this();
+  return [weak, key, req_id](bool ok, std::string payload) {
+    PostUiTask([weak, key, req_id, ok, payload = std::move(payload)] {
+      if (auto self = weak.lock()) self->Respond(key, req_id, ok, payload);
+    });
+  };
+}
+
+void BrowserBridge::Respond(const FrameKey& key, int req_id, bool ok, const std::string& payload) {
+  CefRefPtr<CefFrame> frame = FindFrame(key);
+  if (!frame) return;
   auto msg = CefProcessMessage::Create(ipc::kResponse);
   auto list = msg->GetArgumentList();
   list->SetInt(0, req_id);
@@ -182,6 +198,14 @@ void BrowserBridge::Broadcast(std::set<FrameKey>& listeners, const char* name, c
   for (const auto& key : dead) listeners.erase(key);
 }
 
+void BrowserBridge::DispatchStatus(CefRefPtr<CefBrowser> browser) {
+  CefRefPtr<CefFrame> main = browser->GetMainFrame();
+  if (!main) return;
+  const std::string js = "window.dispatchEvent(new CustomEvent('mockterm:status',{detail:" +
+                         JsStringLiteral(md::ToString(state_)) + "}));";
+  main->ExecuteJavaScript(js, main->GetURL(), 0);
+}
+
 void BrowserBridge::OnTicks(md::SubscriberId subscriber, std::vector<md::Tick> ticks) {
   std::weak_ptr<BrowserBridge> weak = weak_from_this();
   std::string json = md::json::ToJson(ticks);
@@ -203,6 +227,16 @@ void BrowserBridge::OnChat(md::ChatMessage message) {
   std::string json = md::json::ToJson(message);
   PostUiTask([weak, json = std::move(json)] {
     if (auto self = weak.lock()) self->Broadcast(self->chat_listeners_, ipc::kChat, json);
+  });
+}
+
+void BrowserBridge::OnConnectionState(md::ConnectionState state) {
+  std::weak_ptr<BrowserBridge> weak = weak_from_this();
+  PostUiTask([weak, state] {
+    auto self = weak.lock();
+    if (!self) return;
+    self->state_ = state;
+    for (const auto& [id, browser] : self->browsers_) self->DispatchStatus(browser);
   });
 }
 

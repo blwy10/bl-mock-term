@@ -22,6 +22,10 @@ void MockTermClient::OnFrameDetached(CefRefPtr<CefBrowser> browser, CefRefPtr<Ce
   bridge_->OnFrameDetached(browser, frame);
 }
 
+void MockTermClient::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
+  if (frame->IsMain()) bridge_->OnMainFrameLoaded(browser);
+}
+
 bool MockTermClient::OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int, const CefString&,
                                    const CefString&, CefLifeSpanHandler::WindowOpenDisposition, bool,
                                    const CefPopupFeatures&, CefWindowInfo&, CefRefPtr<CefClient>&,

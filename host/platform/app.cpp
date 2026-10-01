@@ -27,7 +27,12 @@ CefRefPtr<CefRenderProcessHandler> MockTermApp::GetRenderProcessHandler() {
 void MockTermApp::OnContextInitialized() {
   RegisterAppSchemeHandler(options_.apps_dir);
 
-  bridge_ = std::make_shared<BrowserBridge>();
+  md::CommsOptions comms;
+  comms.port = options_.comms_port;
+  comms.spawn = options_.spawn_comms;
+  comms.comms_args = options_.comms_args;
+  if (!options_.log_dir.empty()) comms.log_file = options_.log_dir / L"mtclient.log";
+  bridge_ = std::make_shared<BrowserBridge>(std::move(comms));
   bridge_->Start();
 
   CefWindowInfo window_info;

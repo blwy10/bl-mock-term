@@ -1,7 +1,7 @@
 import { mt, securityMap } from '../common/bridge';
 import { el, setNumber } from '../common/dom';
 import { fmtPct, fmtPrice, signClass, shortTicker } from '../common/format';
-import type { SecurityInfo, Tick } from '../types/mockterm';
+import type { ConnectionState, SecurityInfo, Tick } from '../types/mockterm';
 import { CommandHistory, MNEMONICS, parseCommand, suggest, type Mnemonic, type Suggestion } from './command';
 
 interface Panel {
@@ -21,6 +21,7 @@ const list = document.getElementById('suggest') as HTMLUListElement;
 const msg = document.getElementById('msg') as HTMLElement;
 const tabs = document.getElementById('tabs') as HTMLElement;
 const panels = document.getElementById('panels') as HTMLElement;
+const conn = document.getElementById('conn') as HTMLElement;
 
 const panelList: Panel[] = [];
 let active: Panel | undefined;
@@ -42,6 +43,21 @@ function status(text: string, error = false): void {
   msg.textContent = text;
   msg.classList.toggle('error', error);
 }
+
+const CONNECTION_LABEL: Record<ConnectionState, string> = {
+  connecting: 'CONNECTING',
+  live: 'LIVE',
+  stale: 'STALE',
+  down: 'DISCONNECTED',
+};
+
+// Dispatched by the native host whenever the mtcomm/mtserver path changes state.
+window.addEventListener('mockterm:status', (e) => {
+  const state = (e as CustomEvent<ConnectionState>).detail;
+  if (!(state in CONNECTION_LABEL)) return;
+  conn.className = state;
+  conn.textContent = CONNECTION_LABEL[state];
+});
 
 function activate(p: Panel): void {
   active = p;

@@ -10,10 +10,22 @@ set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(marketdata_tests
-  simulator_test.cpp
-  subscription_manager_test.cpp
-  service_test.cpp
+  comms_client_test.cpp
+  convert_test.cpp
 )
 target_link_libraries(marketdata_tests PRIVATE marketdata GTest::gtest_main)
+target_compile_definitions(marketdata_tests PRIVATE
+  WIN32_LEAN_AND_MEAN NOMINMAX MTCOMM_EXE="$<TARGET_FILE:mtcomm>")
+add_dependencies(marketdata_tests mtcomm mtserver)
 include(GoogleTest)
 gtest_discover_tests(marketdata_tests DISCOVERY_MODE PRE_TEST)
+
+# Legacy back end (mtcore, mtserver, mtcomm). Compiled with the same C++14
+# settings as the code under test.
+add_executable(backend_tests
+  backend_integration_test.cpp
+  backend_unit_test.cpp
+)
+target_link_libraries(backend_tests PRIVATE mtcommlib mtserverlib GTest::gtest_main)
+mockterm_legacy_target(backend_tests)
+gtest_discover_tests(backend_tests DISCOVERY_MODE PRE_TEST)
