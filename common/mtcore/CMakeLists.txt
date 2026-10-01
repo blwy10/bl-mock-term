@@ -8,6 +8,7 @@ add_library(mtcore STATIC
   mtcore_message.cpp mtcore_message.h
   mtcore_mutex.cpp mtcore_mutex.h
   mtcore_platform.h
+  mtcore_process.cpp mtcore_process.h
   mtcore_random.cpp mtcore_random.h
   mtcore_refcount.h
   mtcore_socket.cpp mtcore_socket.h

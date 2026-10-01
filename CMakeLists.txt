@@ -16,7 +16,9 @@ enable_testing()
 
 include(cmake/legacy.cmake)
 add_subdirectory(common/mtcore)
+add_subdirectory(common/mtclient)
 add_subdirectory(server)
+add_subdirectory(comms)
 add_subdirectory(host/marketdata)
 
 if(MOCKTERM_BUILD_TESTS)
