@@ -1,5 +1,62 @@
 # Architecture
 
+MockTerm runs as three processes, loosely modelled on the public picture of the
+Bloomberg Terminal: remote C++ server infrastructure, a local communications
+process (`bbcomm.exe` on `localhost:8194`), and a Chromium-based terminal UI.
+How Bloomberg actually splits its private services is not public; this is an
+illustration, not a reverse-engineering.
+
+```
+ mtserver.exe   "remote" servers: feed handlers -> ticker plant -> services     (port 8195)
+      |           //mt/mktdata  //mt/refdata  //mt/news  //mt/msg  //mt/admin
+      |  binary framed protocol (docs/PROTOCOL.md), one TCP session
+      v
+ mtcomm.exe     local comms: subscription mux, last-value cache, conflation,   (port 8194)
+      |           request routing, reconnect + recap, optional mtserver supervisor
+      |  same protocol, one session per local client (mockterm, mtcli, tests)
+      v
+ mockterm.exe   CEF/Chromium host + TypeScript apps; md::CommsClient adapts the
+                protocol to window.mockterm
+```
+
+By default `mockterm.exe` starts `mtcomm.exe --spawn-server` from its own
+directory if nothing is listening on the comms port, and `mtcomm.exe` starts
+and restarts `mtserver.exe`. Children are placed in a Win32 Job Object, so
+closing the terminal tears down the chain. `--no-spawn-comms` attaches to an
+already running `mtcomm.exe` instead (e.g. one started by hand with logging).
+
+`mtserver` and `mtcomm` are deliberately written in an older, pre-C++11 style
+(raw ownership, Win32 threads and critical sections, raw Winsock, hand-written
+serialisation) and compiled as C++14, to give a realistic modernisation target.
+See [MODERNISATION.md](MODERNISATION.md). The CEF host and `host/marketdata`
+are modern C++20.
+
+### mtserver.exe (`server/`)
+
+| Component | Role |
+| --- | --- |
+| `FeedHandler` | One simulated exchange feed per venue: seeded random walk producing quote/trade packets with per-feed sequence numbers; a configurable fraction is dropped (`--drop-prob`) |
+| `GapDetector` | Per-feed sequence tracking; counts gaps and duplicates |
+| `TickerPlant` | Normalises packets into ticks, updates `TickCache` (last value per security) and `TimeSeries` (intraday bars), and publishes to subscribers |
+| `SecurityMaster`, `FieldDictionary` | Reference data for equities, FX, indices and government yields; field metadata |
+| `History` | Deterministic 1D/1M/1Y bars ending at the live price |
+| `NewsEngine`, `ChatEngine` | Templated headlines; IB counterparties that reply quoting live prices |
+| `Service` subclasses | `//mt/mktdata` (subscribe, `Snapshot`), `//mt/refdata` (`SecurityList`, `SecuritySearch`, `ReferenceData`, `HistoricalData`, `FieldList`), `//mt/news` (`Search`, topic `HEADLINES`), `//mt/msg` (`Send`, per-user topic), `//mt/admin` (`Status`, `Services`, `Sessions`) |
+| `ClientSession`, `SubscriptionTable`, `Server` | Logon, heartbeats, correlation ids, fan-out on a worker thread pool |
+
+### mtcomm.exe (`comms/`)
+
+| Component | Role |
+| --- | --- |
+| `CommsEngine` | Owns the upstream `mtclient::Session`, the listener and local clients; routes requests by rewriting correlation ids; serves `//mtcomm/admin Status` |
+| `TopicMux` | Normalises `service|topic|sorted fields`; equivalent local subscriptions share one upstream subscription |
+| `LastValueCache` | Merged image per topic; a late subscriber gets an `INITIAL_PAINT` from cache; images go `STALE` when the upstream drops |
+| `Conflator` | Per-client conflation interval (logon option `conflateMs`); merges partial updates, flags `CONFLATED` |
+| Reconnect | `mtclient::Session` reconnects with exponential backoff; on recovery subscriptions are re-issued and the fresh image is fanned out with `RECAP` |
+| `mtcli.exe` | Command-line client: `status`, `snapshot`, `refdata`, `history`, `news`, `search`, `send`, `subscribe`, ... |
+
+### mockterm.exe (`host/`)
+
 ```
 +------------------------------- mockterm.exe (browser process) -------------------------------+
 |  main.cpp -> platform::RunMain                                                              |
@@ -8,9 +65,9 @@
 |     - AppSchemeHandlerFactory: mockterm://apps/<path> -> <exe dir>/apps/<path>               |
 |     - creates one browser window -> mockterm://apps/shell/index.html                         |
 |   MockTermClient (CefClient)  -- process messages -->  BrowserBridge                         |
-|   BrowserBridge (md::MarketDataListener)                                                     |
+|   BrowserBridge (md::CommsListener)                                                          |
 |     - per-frame subscriptions / news+chat listeners, request dispatch                       |
-|     - owns md::MarketDataService (background thread) and marshals callbacks to TID_UI       |
+|     - owns md::CommsClient (mtclient session to mtcomm), marshals callbacks to TID_UI       |
 +-------------------------------------------^------------------------------------------------+
                                             | CefProcessMessage (JSON payloads)
 +-------------------------------------------v--------- mockterm.exe --type=renderer ----------+
@@ -29,11 +86,13 @@
 | --- | --- | --- |
 | Entry | `host/main.cpp` | No (calls `platform::RunMain`) |
 | Platform | `host/platform/` | **Yes - the only place** |
-| Market data | `host/marketdata/` | No (pure C++20, unit tested) |
+| Market data client | `host/marketdata/` | No (C++20; protocol -> model conversion, unit + integration tested) |
+| Protocol | `common/mtcore`, `common/mtclient` | No (legacy C++14) |
+| Back end | `server/`, `comms/` | No (legacy C++14, separate processes) |
 | Apps | `apps/src/` | No - only `window.mockterm` |
 
 Keeping CEF in `platform/` means a CEF upgrade only touches those files, and the
-simulator can be tested without a browser.
+whole data path can be tested without a browser.
 
 ## Processes
 
@@ -47,6 +106,9 @@ switches handled by the host:
 | `--remote-debugging-port=N` | enable DevTools/CDP (used by `scripts/e2e.ts`) |
 | `--apps-dir=PATH` | serve apps from another directory (default `<exe dir>/apps`) |
 | `--url=URL` | start page (default `mockterm://apps/shell/index.html`) |
+| `--comms-port=N` | port of `mtcomm.exe` (default 8194) |
+| `--server-port=N` | upstream port passed to a spawned `mtcomm.exe` (default 8195) |
+| `--no-spawn-comms` | never start `mtcomm.exe`; wait for one to appear on the port |
 
 The sandbox is disabled for simplicity (no `cef_sandbox.lib` link, no
 `sandbox_info`). Enabling it requires linking the sandbox library with matching
@@ -100,23 +162,27 @@ its subscriptions, and detaching a frame drops all of its browser-side state.
 `CustomEvent` on the top-level shell, which parses and opens the command, so an
 app inside an iframe can open another app without knowing about the shell.
 
-## Market data
+## Market data client
 
-`MarketDataService` runs a 25 ms loop on its own thread:
+`md::CommsClient` (`host/marketdata/comms_client.*`) holds one reconnecting
+`mtclient::Session` to `mtcomm` (logon user `ME`, `conflateMs=100`, i.e. at
+most 10 Hz per subscription):
 
-- `Simulator`: 38 instruments (equities, FX, indices, government yields) with a
-  seeded random walk, bid/ask spread, OHLC, volume, change, timestamps and a
-  monotonically increasing sequence number.
-- `SubscriptionManager`: per-subscriber ticker sets; ticks are coalesced to the
-  latest value per ticker and flushed at most every 100 ms (10 Hz). A new
-  subscription receives an immediate snapshot.
-- `NewsGenerator`: backfills an archive and emits a headline every 2.5-6 s,
-  templated against current prices.
-- `ChatBot`: replies to IB messages after a short delay, quoting live prices for
-  tickers mentioned in the message.
-- `History`: deterministic bars ending at the current price for 1D/1M/1Y.
+| `window.mockterm` | Wire |
+| --- | --- |
+| `subscribe(tickers)` | one `//mt/mktdata` subscription per ticker; `INITIAL_PAINT`/`RECAP` replace the cached tick, partial updates merge into it (`convert.cpp`) |
+| `getHistory(t, range)` | `//mt/refdata HistoricalData {security, range}` |
+| `getSecurities()` | `//mt/refdata SecurityList` |
+| `getNews(query)` / `onNews` | `//mt/news Search` / subscription to `HEADLINES` |
+| `sendChat` / `onChat` | `//mt/msg Send` / subscription to the user's topic |
 
-Listener callbacks fire on the service thread; `BrowserBridge` serialises to
+Session events become a connection state (`connecting`, `live`, `stale` when
+`mtcomm` reports the upstream down, `down` when `mtcomm` itself is gone), which
+`BrowserBridge` dispatches to the shell as a `mockterm:status` event and the
+shell renders in the top bar. If a spawned `mtcomm.exe` exits, the client
+restarts it.
+
+Callbacks fire on the session's reader thread; `BrowserBridge` serialises to
 JSON there and posts the send to the CEF UI thread with `CefPostTask(TID_UI)`.
 
 ## Apps

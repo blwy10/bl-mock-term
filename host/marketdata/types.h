@@ -6,6 +6,8 @@
 
 namespace mockterm::md {
 
+using SubscriberId = uint64_t;
+
 enum class AssetClass { Equity, Fx, Index, Rate };
 
 const char* ToString(AssetClass c);
@@ -80,5 +82,18 @@ struct ChatMessage {
 enum class HistoryRange { OneDay, OneMonth, OneYear };
 
 bool ParseHistoryRange(const std::string& s, HistoryRange* out);
+const char* ToString(HistoryRange r);
+
+bool ParseAssetClass(const std::string& s, AssetClass* out);
+
+// Health of the path mockterm -> mtcomm -> mtserver.
+enum class ConnectionState {
+  Connecting,  // no session to mtcomm yet
+  Live,        // mtcomm up and its upstream to mtserver up
+  Stale,       // mtcomm up, upstream down: cached values only
+  Down,        // lost the session to mtcomm; reconnecting
+};
+
+const char* ToString(ConnectionState s);
 
 }  // namespace mockterm::md

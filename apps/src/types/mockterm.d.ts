@@ -4,6 +4,11 @@
 export type Unsubscribe = () => void;
 export type HistoryRange = '1D' | '1M' | '1Y';
 export type AssetClass = 'Equity' | 'Curncy' | 'Index' | 'Rate';
+/**
+ * Health of the mockterm -> mtcomm -> mtserver path, delivered to the shell
+ * as a `mockterm:status` CustomEvent whose detail is this value.
+ */
+export type ConnectionState = 'connecting' | 'live' | 'stale' | 'down';
 
 export interface Tick {
   ticker: string;

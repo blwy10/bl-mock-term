@@ -7,6 +7,10 @@
 #prompt { color: var(--amber); font-weight: bold; }
 #cmd { flex: 1; font-size: 14px; text-transform: none; background: #000; border-color: #3a2a10; }
 #clock { min-width: 160px; text-align: right; }
+#conn { padding: 1px 8px; font-weight: bold; letter-spacing: 1px; border: 1px solid currentColor; }
+#conn.live { color: var(--up); }
+#conn.stale { color: var(--amber); }
+#conn.down, #conn.connecting { color: var(--down); }
 #suggest {
   position: absolute; top: 26px; left: 14px; right: 0; margin: 0; padding: 0; list-style: none; z-index: 10;
   background: #0b0b0b; border: 1px solid var(--amber-dim); max-height: 260px; overflow: auto;

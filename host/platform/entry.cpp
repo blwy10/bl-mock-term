@@ -36,6 +36,13 @@ int RunMain(HINSTANCE instance) {
   options.apps_dir = cmd->HasSwitch("apps-dir") ? std::filesystem::path(cmd->GetSwitchValue("apps-dir").ToWString())
                                                 : ExeDir() / L"apps";
   if (cmd->HasSwitch("url")) options.start_url = cmd->GetSwitchValue("url").ToString();
+  if (cmd->HasSwitch("comms-port")) options.comms_port = std::stoi(cmd->GetSwitchValue("comms-port").ToString());
+  if (cmd->HasSwitch("no-spawn-comms")) options.spawn_comms = false;
+  if (cmd->HasSwitch("server-port")) {
+    // Lets tests run a private mtcomm/mtserver pair alongside a normal instance.
+    options.comms_args = {"--upstream-port", cmd->GetSwitchValue("server-port").ToString()};
+  }
+  options.log_dir = CacheRoot();
 
   CefRefPtr<MockTermApp> app = new MockTermApp(options);
 

@@ -11,6 +11,7 @@ namespace mockterm::platform {
 class MockTermClient : public CefClient,
                        public CefDisplayHandler,
                        public CefFrameHandler,
+                       public CefLoadHandler,
                        public CefLifeSpanHandler {
  public:
   explicit MockTermClient(std::shared_ptr<BrowserBridge> bridge);
@@ -18,6 +19,7 @@ class MockTermClient : public CefClient,
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefFrameHandler> GetFrameHandler() override { return this; }
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
+  CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
 
   bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                 CefProcessId source_process,
@@ -28,6 +30,9 @@ class MockTermClient : public CefClient,
 
   // CefFrameHandler
   void OnFrameDetached(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame) override;
+
+  // CefLoadHandler
+  void OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int httpStatusCode) override;
 
   // CefLifeSpanHandler
   bool OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int popup_id,
