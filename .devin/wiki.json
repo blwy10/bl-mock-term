@@ -1,0 +1,151 @@
+{
+  "repo_notes": [
+    {
+      "content": "WHAT: MockTerm is a Windows x64 desktop market-terminal mock. Three processes: mtserver.exe (simulated remote data centre, port 8195) -> mtcomm.exe (local comms process, port 8194) -> mockterm.exe (CEF/Chromium host rendering TypeScript terminal apps). All prices, news and chat are synthetic and deterministic per seed; there is no real market data, no third-party branding and no network beyond loopback. It is loosely modelled on the public picture of the Bloomberg Terminal (bbcomm.exe, BLPAPI-style services); it is an illustration, not a reverse-engineering, and is not wire-compatible with BLPAPI.\nARCHITECTURE: common/mtcore (foundation library) and common/mtclient (reconnecting protocol session) are shared by server/ (mtserver.exe), comms/ (mtcomm.exe, mtcli.exe) and host/marketdata (md::CommsClient). host/platform/ is the ONLY code that includes CEF headers. apps/src/ are TypeScript apps that talk to the host only through window.mockterm (apps/src/types/mockterm.d.ts). docs/ARCHITECTURE.md and docs/PROTOCOL.md are accurate and current; prefer the code where they differ.\nCODE STYLE: common/, server/ and comms/ are deliberately written in a pre-C++11 style (raw new/delete, std::auto_ptr, Win32 threads/CRITICAL_SECTION/events, raw Winsock, BDE-style 'd_' members and //@PURPOSE headers) and built as C++14 via cmake/legacy.cmake. This is intentional (a modernisation target, see docs/MODERNISATION.md). Describe it factually; do not call it a bug and do not rewrite examples in modern C++ except on the Modernisation Guide page. host/platform and host/marketdata are modern C++20.\nIGNORE: docs/screenshots/*.png, apps/package-lock.json and scripts/package-lock.json (no pages or diagrams about them). third_party/cef/, build/, apps/dist/ and artifacts/ are git-ignored build outputs that do not exist in the repo.\nGLOSSARY: ticker strings look like 'AAPL US Equity', 'EURUSD Curncy', 'SPX Index'; the last word is the market-sector ('yellow') key. Mnemonics DES, GP, WEI, TOP, IB are the screens; <GO> is Enter. Subscription flags: INITIAL_PAINT (first full image), RECAP (full image after recovery), STALE (served from cache while upstream is down), CONFLATED (several updates merged). LVC = last-value cache. Services are named //mt/mktdata, //mt/refdata, //mt/news, //mt/msg, //mt/admin and //mtcomm/admin.\nSTYLE: audience is engineers new to the repo. Name the real classes, functions and files. State which thread each callback runs on wherever threading matters. Use mermaid sequence diagrams for request, subscription and recovery flows. Never invent CLI flags, fields, operations or numbers; take them from the code."
+    }
+  ],
+  "allow_additional_pages": false,
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "What MockTerm is, its three-process architecture, the code layers and where to start reading. Anchors: ./README.md, docs/ARCHITECTURE.md, ./CMakeLists.txt, host/main.cpp, server/main.cpp, comms/main.cpp. Cover: the mtserver -> mtcomm -> mockterm chain with ports 8194 and 8195, the layer table (which directories depend on CEF and which are legacy C++14), the repository layout, and the screens a user can open. Include one mermaid component diagram of processes and libraries. Link to the section pages rather than repeating their detail."
+    },
+    {
+      "title": "Process Topology and Lifecycle",
+      "purpose": "How the three executables find, spawn, supervise and tear down each other, and how a request travels end to end. Anchors: host/platform/entry.cpp, host/marketdata/comms_client.cpp, comms/mtcomm_engine.cpp, common/mtcore/mtcore_process.cpp, server/main.cpp, comms/main.cpp. Cover: mockterm.exe spawning 'mtcomm.exe --spawn-server' when nothing listens on the comms port; mtcomm spawning and restarting mtserver (superviseServer); the 'MTSERVER READY port=' / 'MTCOMM READY port=' stdout handshake; Win32 Job Objects with KILL_ON_JOB_CLOSE; --no-spawn-comms, --comms-port, --server-port; the connecting, live, stale and down connection states. Include a sequence diagram of startup and one of a DES tick travelling from FeedHandler to the DOM."
+    },
+    {
+      "title": "Wire Protocol",
+      "purpose": "The MockTerm binary protocol used on both hops (mtserver<->mtcomm and mtcomm<->local clients), and the shared code that implements it. Anchors: docs/PROTOCOL.md, common/mtcore/mtcore_codec.h, common/mtcore/mtcore_message.h, common/mtclient/mtclient_session.h. Keep high-level: message types, services table, subscription flags. Link to the child pages for framing and session details."
+    },
+    {
+      "title": "Framing, Messages and Elements",
+      "purpose": "Frame layout, the Message envelope, MessageType and MessageFlags, and the Element value tree, as implemented in the mtcore library. Anchors: common/mtcore/mtcore_codec.cpp, common/mtcore/mtcore_codec.h, common/mtcore/mtcore_message.cpp, common/mtcore/mtcore_element.cpp, common/mtcore/mtcore_element.h, docs/PROTOCOL.md. Cover: big-endian ByteWriter and ByteReader, magic 0x4D54 and version, the 16 MiB frame limit (k_MAX_FRAME) and 32-level nesting limit (k_MAX_DEPTH), decode failure closing the connection, Element scalar, sequence and array kinds and merge semantics used by caches and conflation. Show a byte-level example of one SUBSCRIPTION_DATA frame. Tests: host/tests/backend_unit_test.cpp (Codec, Element).",
+      "parent": "Wire Protocol"
+    },
+    {
+      "title": "Client Session (mtclient)",
+      "purpose": "mtclient::Session: the reconnecting protocol client used by mtcomm (upstream), mtcli and mockterm's md::CommsClient. Anchors: common/mtclient/mtclient_session.h, common/mtclient/mtclient_session.cpp, common/mtcore/mtcore_connection.cpp. Cover: SessionOptions, the manager thread state machine (connect, LOGON and LOGON_ACK, heartbeats, exponential back-off reconnect), remembered subscriptions re-sent after reconnect, request queueing while disconnected, requestTimeoutMs, CONNECTION_LOST failures for in-flight requests, and which thread EventHandler callbacks run on. Include a state diagram.",
+      "parent": "Wire Protocol"
+    },
+    {
+      "title": "mtcore Foundation Library",
+      "purpose": "common/mtcore/: the legacy C++14 foundation shared by mtserver, mtcomm, mtcli and the host's comms client. Anchors: common/mtcore/, common/mtcore/mtcore_platform.h, common/mtcore/mtcore_thread.h, common/mtcore/mtcore_mutex.h, common/mtcore/mtcore_refcount.h, common/mtcore/mtcore_connection.h, common/mtcore/mtcore_socket.h, common/mtcore/mtcore_threadpool.cpp, common/mtcore/mtcore_log.cpp, common/mtcore/mtcore_random.cpp, common/mtcore/mtcore_time.cpp, common/mtcore/mtcore_process.h, common/mtcore/CMakeLists.txt. Cover each component: integer typedefs and include order, Thread, Runnable and MemberRunnable, ThreadPool and Job, Mutex, LockGuard, Event and AtomicInt, RefCounted and Handle lifetime rules, TcpSocket and TcpListener, Connection reader+writer threads, send queue and slow-consumer disconnect, ChildProcess, Logger and MT_LOG_* macros, TimeUtil, the seedable xorshift64* Random. The codec, message and element types are covered on the Framing page; link there."
+    },
+    {
+      "title": "mtserver (Simulated Remote Server)",
+      "purpose": "server/: mtserver.exe, the simulated data centre (ticker plant, reference data, history, news, chat), and how its parts fit together. Anchors: server/, server/mtsrv_server.h, server/mtsrv_tickerplant.h, server/mtsrv_service.h, server/CMakeLists.txt. Keep high-level: component map, threads (accept, timer, ticker plant, worker pool, per-connection reader and writer) and the services list. Link to the child pages."
+    },
+    {
+      "title": "Server Core, Sessions and Service Dispatch",
+      "purpose": "mtsrv::Server assembly, client sessions, logon and heartbeats, subscription tracking and how REQUEST and SUBSCRIBE messages reach a Service. Anchors: server/mtsrv_server.cpp, server/mtsrv_server.h, server/mtsrv_clientsession.cpp, server/mtsrv_subscriptiontable.cpp, server/mtsrv_service.cpp, server/mtsrv_config.cpp, server/main.cpp. Cover: ServerConfig command-line options and defaults, onMessage routing (LOGON, HEARTBEAT, SUBSCRIBE and UNSUBSCRIBE handled inline on the connection reader thread; REQUEST dispatched to the ThreadPool as a RequestJob), ErrorCode categories and ServiceUtil reply helpers, the //mt/admin Status, Services and Sessions operations, the timer loop (news and chat polling, heartbeat timeouts, stats, reaping closed connections).",
+      "parent": "mtserver (Simulated Remote Server)"
+    },
+    {
+      "title": "Ticker Plant Pipeline",
+      "purpose": "How simulated exchange feeds become normalized ticks: FeedHandler -> GapDetector -> TickCache -> TimeSeriesStore -> TickListener. Anchors: server/mtsrv_tickerplant.cpp, server/mtsrv_feedhandler.cpp, server/mtsrv_gapdetector.cpp, server/mtsrv_tickcache.cpp, server/mtsrv_timeseries.cpp, server/mtsrv_tick.h. Cover: one feed per venue with per-feed sequence numbers, the random walk, simulated packet loss (--drop-prob) and gap and duplicate detection, quote vs trade packets, normalisation into Tick (bid, ask, last, high, low, volume, change) with plant sequence numbers, one-minute BarRing capture, TickerPlantConfig, and step() used by tests. Include a data-flow diagram. Tests: host/tests/backend_unit_test.cpp (GapDetector).",
+      "parent": "mtserver (Simulated Remote Server)"
+    },
+    {
+      "title": "Market Data Service",
+      "purpose": "//mt/mktdata: real-time subscriptions and the Snapshot operation. Anchors: server/mtsrv_mktdataservice.cpp, server/mtsrv_mktdataservice.h, server/mtsrv_fields.cpp. Cover: topic = security, field selection (default real-time fields), SUBSCRIPTION_STARTED then INITIAL_PAINT from the TickCache, one SUBSCRIPTION_DATA per tick per subscriber, SUBSCRIPTION_FAILURE for unknown securities, unsubscribe and session close, the Snapshot request and response shape. Include a sequence diagram.",
+      "parent": "mtserver (Simulated Remote Server)"
+    },
+    {
+      "title": "Reference Data, Fields and History",
+      "purpose": "The security master, the field dictionary and //mt/refdata (SecurityList, SecuritySearch, ReferenceData, HistoricalData, FieldList). Anchors: server/mtsrv_security.cpp, server/mtsrv_security.h, server/mtsrv_fields.cpp, server/mtsrv_refdataservice.cpp, server/mtsrv_history.cpp, server/mtsrv_history.h. Cover: asset classes and the instrument universe (equities, FX, indices, government yields) with fundamentals, exchanges and venues, field categories and FieldMapper, the request operations and their argument and response elements, deterministic 1D, 1M and 1Y bar synthesis ending at the live price and HistoryGenerator::overlay placing captured intraday bars by timestamp. Tests: host/tests/backend_unit_test.cpp (HistoryOverlay).",
+      "parent": "mtserver (Simulated Remote Server)"
+    },
+    {
+      "title": "News and Chat",
+      "purpose": "Simulated news headlines (//mt/news) and instant messaging with simulated counterparties (//mt/msg). Anchors: server/mtsrv_newsengine.cpp, server/mtsrv_newsservice.cpp, server/mtsrv_chatengine.cpp, server/mtsrv_msgservice.cpp. Cover: templated headline generation, backfill and minimum and maximum publish intervals, the searchable archive, HEADLINES vs query topics, Search; ChatEngine recording outgoing lines and scheduling replies that quote live prices, Send {from,to,text}, per-user inbox topics, and how the server timer loop drives both engines.",
+      "parent": "mtserver (Simulated Remote Server)"
+    },
+    {
+      "title": "mtcomm (Local Comms Process)",
+      "purpose": "comms/: mtcomm.exe, the bbcomm-style local process that shares one upstream session among local clients, plus the mtcli tool. Anchors: comms/, comms/mtcomm_engine.h, comms/CMakeLists.txt, docs/PROTOCOL.md. Keep high-level: responsibilities (routing, sharing, LVC, conflation, reconnect and recap, server supervision), lock ordering, and threads. Link to the child pages."
+    },
+    {
+      "title": "Comms Engine and Request Routing",
+      "purpose": "mtcomm::CommsEngine: local listener, client logon, request forwarding with correlation-id rewriting, and //mtcomm/admin Status. Anchors: comms/mtcomm_engine.cpp, comms/mtcomm_engine.h, comms/mtcomm_localclient.cpp, comms/mtcomm_config.cpp, comms/main.cpp. Cover: CommsConfig options and defaults, LocalClient lifecycle and conflateMs clamping at logon, the RequestRouteMap from upstream cid to (client id, client cid), routing of RESPONSE, PARTIAL_RESPONSE and REQUEST_FAILURE, client heartbeat timeouts and reaping, d_routeMutex before d_clientMutex lock ordering, statistics counters. Include a request sequence diagram.",
+      "parent": "mtcomm (Local Comms Process)"
+    },
+    {
+      "title": "Subscription Sharing, Cache and Conflation",
+      "purpose": "How identical local subscriptions share one upstream subscription (TopicMux), get an instant paint from the last-value cache, and are rate-limited per client (Conflator). Anchors: comms/mtcomm_topicmux.cpp, comms/mtcomm_topicmux.h, comms/mtcomm_lvc.cpp, comms/mtcomm_conflator.cpp, comms/mtcomm_conflator.h. Cover: the service|topic|sorted-fields key, attach, detach and last-subscriber removal, DownstreamKey, LastValueCache merge vs replace and stale marking, late-joiner INITIAL_PAINT without an upstream round trip, Conflator add and drain per interval and the CONFLATED flag, and why only field-based market-data subscriptions are conflated while news and chat streams pass through untouched. Tests: host/tests/backend_unit_test.cpp (TopicMux, LastValueCache, Conflator).",
+      "parent": "mtcomm (Local Comms Process)"
+    },
+    {
+      "title": "Upstream Outage, Reconnect and Recap",
+      "purpose": "What happens when mtserver dies or restarts: SESSION_STATUS broadcasts, STALE cache, resubscription and RECAP, end to end through to the terminal's top bar. Anchors: comms/mtcomm_engine.cpp, host/tests/backend_integration_test.cpp, scripts/e2e.ts. Trace processSessionState, TopicMux::markAllUnstarted and LastValueCache::markAllStale, the UPSTREAM_DOWN and UPSTREAM_UP statuses, re-issued subscriptions and the RECAP-flagged image, server restart by the supervisor, and how md::CommsClient maps this to the live, stale and down states. Include a sequence diagram of an outage and recovery. Explain the integration tests SharesSubscriptionsAndRecoversFromServerRestart and SessionReportsDownAndCanRestart.",
+      "parent": "mtcomm (Local Comms Process)"
+    },
+    {
+      "title": "mtcli Command-Line Client",
+      "purpose": "mtcli.exe: the diagnostic command-line client for mtcomm or mtserver. Anchors: comms/mtcli.cpp, common/mtclient/mtclient_session.h. Cover every subcommand implemented in comms/mtcli.cpp (e.g. status, snapshot, refdata, history, news, search, send, subscribe) with its arguments, the request or subscription it sends and example output, plus the global options and heartbeat behaviour. Only list subcommands that exist in the code.",
+      "parent": "mtcomm (Local Comms Process)"
+    },
+    {
+      "title": "mockterm.exe CEF Host",
+      "purpose": "host/: the native Windows executable that embeds Chromium via CEF and connects the TypeScript apps to mtcomm. Anchors: host/, host/main.cpp, host/platform/app.h, host/CMakeLists.txt. Keep high-level: browser vs renderer processes, the rule that CEF is confined to host/platform/, the marketdata layer, and how apps are staged next to the exe. Link to the child pages."
+    },
+    {
+      "title": "Process Entry, CefApp and mockterm:// Scheme",
+      "purpose": "CEF process startup, MockTermApp and MockTermClient, command-line switches, and the mockterm:// scheme that serves the bundled apps. Anchors: host/platform/entry.cpp, host/platform/app.cpp, host/platform/client.cpp, host/platform/scheme.cpp, host/platform/ui_task.cpp, host/win/mockterm.exe.manifest. Cover: CefExecuteProcess for sub-processes, CefSettings (no_sandbox, remote_debugging_port, cache paths), HostOptions and switches (--apps-dir, --url, --comms-port, --server-port, --no-spawn-comms, --remote-debugging-port), window creation, popup and frame-detach handling, scheme registration as standard+secure, path containment against '..' traversal, MIME lookup, PostUiTask. Note the sandbox is disabled and what enabling it would need.",
+      "parent": "mockterm.exe CEF Host"
+    },
+    {
+      "title": "JavaScript Bridge (window.mockterm)",
+      "purpose": "How window.mockterm is injected into frames and how calls cross renderer -> browser -> mtcomm and back. Anchors: host/platform/renderer_bridge.cpp, host/platform/browser_bridge.cpp, host/platform/ipc.h, apps/src/types/mockterm.d.ts. Cover: OnContextCreated installing the API only in mockterm:// frames, per-frame and per-V8-context state, the mt.* process messages and their arguments, V8 promises for requests, JSON payloads, the openApp -> 'mockterm:open' and connection -> 'mockterm:status' CustomEvents, teardown on context release and frame detach, and threading (session thread -> CefPostTask(TID_UI)). Include a sequence diagram for subscribe and for getHistory.",
+      "parent": "mockterm.exe CEF Host"
+    },
+    {
+      "title": "Market Data Client (host/marketdata)",
+      "purpose": "md::CommsClient and the CEF-free conversion layer that turns wire elements into the renderer-facing types and JSON. Anchors: host/marketdata/comms_client.cpp, host/marketdata/comms_client.h, host/marketdata/convert.cpp, host/marketdata/json.cpp, host/marketdata/types.h. Cover: CommsOptions (user ME, conflate_ms 100, request timeout, spawn), the mapping from window.mockterm calls to //mt services, image replacement on INITIAL_PAINT and RECAP and partial merges (ApplyTickFields), ConnectionState transitions, restarting a spawned mtcomm, JSON field names matching apps/src/types/mockterm.d.ts. Tests: host/tests/convert_test.cpp, host/tests/comms_client_test.cpp.",
+      "parent": "mockterm.exe CEF Host"
+    },
+    {
+      "title": "Terminal Apps",
+      "purpose": "apps/: the TypeScript terminal apps rendered inside the CEF host, one iframe per screen under a shell. Anchors: apps/src/, apps/src/types/mockterm.d.ts, apps/package.json. Keep high-level: the shell-plus-iframe model, the five screens and their commands, and the rule that apps use only window.mockterm. Link to the child pages."
+    },
+    {
+      "title": "Shell: Command Line, Panels and Status",
+      "purpose": "The top-level shell page: command parsing, autocomplete, persisted history, tabbed and tiled panels, ticker strip and connection status. Anchors: apps/src/shell/main.ts, apps/src/shell/command.ts, apps/src/shell/index.html, apps/test/command.test.ts. Cover: parseCommand, resolveSecurity, suggest and CommandHistory, mnemonics and yellow keys, keyboard handling (Enter, Tab, arrow keys, F2, Ctrl+W, Escape), how a command opens the app page with a sec query parameter in an iframe panel, the 'mockterm:open' and 'mockterm:status' listeners, and the ticker strip subscription.",
+      "parent": "Terminal Apps"
+    },
+    {
+      "title": "DES and GP Screens",
+      "purpose": "The security description and quote screen (DES) and the price chart (GP). Anchors: apps/src/des/main.ts, apps/src/gp/main.ts, apps/src/gp/index.html. Cover: reading the 'sec' parameter, getSecurities for static data and fundamentals, live subscribe updates with flash-on-change, related news on DES, GP canvas rendering of the 1D, 1M and 1Y ranges via getHistory, and the live subscription updating the GP header and latest bar.",
+      "parent": "Terminal Apps"
+    },
+    {
+      "title": "WEI, TOP and IB Screens",
+      "purpose": "World equity indices monitor (WEI), top news (TOP) and instant messaging (IB). Anchors: apps/src/wei/main.ts, apps/src/top/main.ts, apps/src/ib/main.ts. Cover: WEI regional grouping and live rows (double-click opens GP), TOP getNews and onNews with an optional security filter and story view (ticker links open DES), IB contacts, sendChat and onChat, and message rendering.",
+      "parent": "Terminal Apps"
+    },
+    {
+      "title": "App Common Library and Bundling",
+      "purpose": "Shared app helpers, the dark terminal theme and how esbuild bundles each app for the host. Anchors: apps/src/common/bridge.ts, apps/src/common/dom.ts, apps/src/common/format.ts, apps/src/common/theme.css, apps/build.mjs, apps/tsconfig.json. Cover: mt() and the missing-bridge error, securityMap caching, the el, setNumber and flash DOM helpers, price, percent, volume and time formatting, the APPS list and per-app IIFE bundles written to the git-ignored dist directory, and the npm build, typecheck and test scripts.",
+      "parent": "Terminal Apps"
+    },
+    {
+      "title": "Build, Test and Modernisation",
+      "purpose": "How MockTerm is built and tested on Windows, and the plan for modernising the legacy C++ back end. Anchors: ./CMakeLists.txt, scripts/build.ps1, host/tests/CMakeLists.txt, docs/MODERNISATION.md. Keep high-level: toolchain (MSVC, CMake >= 3.21, Node >= 20), CMake target graph, and the test layers. Link to the child pages."
+    },
+    {
+      "title": "Build System and CEF Version Pinning",
+      "purpose": "CMake targets, the C++14 legacy settings, CEF download and pinning, and the PowerShell build and run scripts. Anchors: ./CMakeLists.txt, cmake/cef.cmake, cmake/legacy.cmake, scripts/build.ps1, scripts/get-cef.ps1, scripts/run.ps1, docs/UPGRADING.md. Cover: the MOCKTERM_BUILD_HOST and MOCKTERM_BUILD_TESTS options, the static MSVC runtime used by every target, mockterm_legacy_target and mockterm_runtime_dir, the libraries (mtcore, mtclient, mtserverlib, mtcommlib, marketdata) and executables, CEF_VERSION as the single source of truth (read by get-cef.ps1 with SHA1 verification), staging of the bundled apps into the runtime directory, and the CEF upgrade procedure.",
+      "parent": "Build, Test and Modernisation"
+    },
+    {
+      "title": "Test Suites",
+      "purpose": "Every test layer: GoogleTest back-end unit and integration tests, CommsClient tests against real processes, Vitest app tests and the Playwright-over-CDP end-to-end test. Anchors: host/tests/backend_unit_test.cpp, host/tests/backend_integration_test.cpp, host/tests/comms_client_test.cpp, host/tests/convert_test.cpp, apps/test/command.test.ts, scripts/e2e.ts. For each suite: what it covers (list the test cases), how it is built and run (ctest, npm test, npm run e2e [--attach]), and what infrastructure it starts (in-process server and comms engine, spawned mtcomm.exe and mtserver.exe, mockterm.exe with --remote-debugging-port=9222).",
+      "parent": "Build, Test and Modernisation"
+    },
+    {
+      "title": "Modernisation Guide",
+      "purpose": "The inventory of legacy C++ idioms in the mtcore, mtclient, mtserver and mtcomm code and the suggested order for moving them to modern C++. Anchors: docs/MODERNISATION.md, cmake/legacy.cmake, common/mtcore/mtcore_refcount.h, common/mtcore/mtcore_mutex.cpp, common/mtcore/mtcore_element.h, server/mtsrv_server.h. For each idiom, show a short real snippet from the code and its modern replacement, explain the risk, and name the tests that act as the safety net. This is the only page where modern rewrites of legacy code should be shown.",
+      "parent": "Build, Test and Modernisation"
+    }
+  ]
+}
