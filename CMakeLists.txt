@@ -14,6 +14,9 @@ option(MOCKTERM_BUILD_TESTS "Build the C++ unit tests" ON)
 
 enable_testing()
 
+include(cmake/legacy.cmake)
+add_subdirectory(common/mtcore)
+add_subdirectory(server)
 add_subdirectory(host/marketdata)
 
 if(MOCKTERM_BUILD_TESTS)
