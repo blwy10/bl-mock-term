@@ -178,6 +178,12 @@ export class CommandHistory {
     return this.cursor === this.entries.length ? this.draft : this.entries[this.cursor];
   }
 
+  /** Returns the cursor to the end and drops any saved draft. */
+  reset(): void {
+    this.cursor = this.entries.length;
+    this.draft = '';
+  }
+
   all(): readonly string[] {
     return this.entries;
   }

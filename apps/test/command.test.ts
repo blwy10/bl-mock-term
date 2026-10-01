@@ -79,6 +79,15 @@ describe('suggest', () => {
 });
 
 describe('CommandHistory', () => {
+  it('reset discards the draft and restarts from the newest entry', () => {
+    const h = new CommandHistory(['WEI', 'TOP']);
+    expect(h.prev('GP')).toBe('TOP');
+    h.reset();
+    expect(h.next()).toBeUndefined();
+    expect(h.prev('')).toBe('TOP');
+    expect(h.next()).toBe('');
+  });
+
   it('navigates older/newer and restores the draft', () => {
     const h = new CommandHistory();
     h.push('WEI');
